@@ -6,6 +6,7 @@ export async function middleware(request: NextRequest) {
 
   // On prépare une response mutable pour que Supabase puisse écrire les cookies si besoin
   const response = NextResponse.next();
+  if (pathname.startsWith("/auth/callback")) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

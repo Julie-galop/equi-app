@@ -1,31 +1,32 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
 
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/dashboard";
 
-  const response = NextResponse.redirect(new URL(next, url.origin));
+  // Sécurité : s'il n'y a pas de code, retour login
+  if (!code) {
+    return NextResponse.redirect(new URL("/login", url.origin));
+  }
+
+  // On prépare la réponse de redirection finale
+  const response = NextResponse.redirect(
+    new URL("/dashboard", url.origin)
+  );
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
+        // ✅ cookies lus depuis NextRequest (FIABLE)
         getAll() {
-          // cookies reçus dans la requête
-          return request.headers
-            .get("cookie")
-            ?.split(";")
-            .map((c) => {
-              const [name, ...rest] = c.trim().split("=");
-              return { name, value: rest.join("=") };
-            }) ?? [];
+          return request.cookies.getAll();
         },
+        // ✅ cookies écrits sur la réponse (OBLIGATOIRE)
         setAll(cookiesToSet) {
-          // on écrit les cookies sur la réponse (important !)
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
@@ -34,9 +35,8 @@ export async function GET(request: Request) {
     }
   );
 
-  if (code) {
-    await supabase.auth.exchangeCodeForSession(code);
-  }
+  // 🔑 échange le code contre une session (pose les cookies)
+  await supabase.auth.exchangeCodeForSession(code);
 
   return response;
 }
