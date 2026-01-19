@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { nextDueDate, getStatus } from '@/lib/calcDue';
 import { parseISO, differenceInMonths, format } from 'date-fns';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type UpcomingItem = {
   id: string;
@@ -14,22 +17,38 @@ type UpcomingItem = {
 };
 
 export default async function Home() {
-  const { data: horses } = await supabase.from('horses').select('id, name');
-  const totalHorses = horses?.length ?? 0;
+  const supabase = await createSupabaseServerClient();
+
+  const { data: horses, error: horsesErr } = await supabase
+    .from('horses')
+    .select('id, name');
+
+  // Si jamais il y a une erreur de lecture, on évite de casser la page
+  const safeHorses = horses ?? [];
+  const totalHorses = safeHorses.length;
 
   let upcomingCount = 0;
   let upToDateCount = 0;
   const upcomingList: UpcomingItem[] = [];
   const now = new Date();
 
-  for (const horse of horses ?? []) {
+  for (const horse of safeHorses) {
     const { data: vaccs } = await supabase
       .from('vaccinations')
       .select('type, date')
       .eq('horse_id', horse.id);
 
-    const grippeDates = vaccs?.filter(v => v.type === 'GRIPPE').map(v => parseISO(v.date)) ?? [];
-    const rhinoDates = vaccs?.filter(v => v.type === 'RHINO').map(v => parseISO(v.date)) ?? [];
+    const safeVaccs = vaccs ?? [];
+
+    const grippeDates =
+      safeVaccs
+        .filter(v => v.type === 'GRIPPE')
+        .map(v => parseISO(v.date)) ?? [];
+
+    const rhinoDates =
+      safeVaccs
+        .filter(v => v.type === 'RHINO')
+        .map(v => parseISO(v.date)) ?? [];
 
     const grippeDue = nextDueDate(grippeDates);
     const rhinoDue = nextDueDate(rhinoDates);
@@ -116,7 +135,8 @@ export default async function Home() {
             <div className="text-xs uppercase tracking-wider text-slate-500">Dashboard</div>
             <div className="text-xl font-extrabold text-[#1d5998] leading-tight">Galop Tricastin</div>
             <div className="mt-2 text-sm text-slate-600">
-              Suivi vaccinal <span className="font-semibold">Grippe</span> & <span className="font-semibold">Rhino</span>
+              Suivi vaccinal <span className="font-semibold">Grippe</span> &{' '}
+              <span className="font-semibold">Rhino</span>
             </div>
           </div>
 
@@ -155,6 +175,13 @@ export default async function Home() {
               </div>
             </div>
           </div>
+
+          {/* Message debug discret si la requête horses échoue */}
+          {horsesErr && (
+            <div className="mt-4 text-xs text-red-600">
+              Erreur chargement chevaux : {horsesErr.message}
+            </div>
+          )}
         </aside>
 
         {/* Main content */}
@@ -212,7 +239,6 @@ export default async function Home() {
                 {upcomingList.length > 0 ? (
                   upcomingList.map(item => (
                     <li key={item.id}>
-                      {/* ✅ ligne cliquable vers la fiche */}
                       <Link
                         href={`/horses/${item.horseId}`}
                         className="block rounded-xl border border-[#b3bec5]/60 bg-[#e7ebed]/50 px-4 py-4 hover:bg-[#e7ebed] transition-colors"
@@ -275,7 +301,6 @@ export default async function Home() {
             <div className="md:hidden h-28" />
           </div>
 
-          {/* ✅ Bottom nav active (mobile) */}
           <BottomNav />
         </section>
       </div>

@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-export function createSupabaseServerClient() {
-  const cookieStore = cookies();
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,7 +12,6 @@ export function createSupabaseServerClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        // ❌ PAS de setAll ici (cookies read-only en Server Component)
       },
     }
   );
