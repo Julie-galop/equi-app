@@ -1,5 +1,3 @@
-import Image from 'next/image';
-
 export default function Header() {
   return (
     <header className="bg-white">
@@ -8,27 +6,25 @@ export default function Header() {
 
           {/* Logo Galop (gauche) */}
           <div className="flex items-center justify-between sm:justify-start sm:gap-4">
-            <Image
+            <img
               src="/logo-galop.png"
               alt="Logo Le Galop Tricastin"
               width={56}
               height={56}
-              priority
-              className="sm:w-[64px] sm:h-[64px]"
+              className="w-14 h-14 sm:w-16 sm:h-16 object-contain"
             />
 
-            {/* Logo élevage visible sur mobile */}
-            <Image
+            {/* Logo élevage mobile */}
+            <img
               src="/logo-elevage.png"
               alt="Logo élevage"
               width={56}
               height={56}
-              priority
-              className="sm:hidden"
+              className="w-14 h-14 object-contain sm:hidden"
             />
           </div>
 
-          {/* Titre centré */}
+          {/* Titre */}
           <div className="text-center sm:flex-1">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1d5998] tracking-tight">
               Le Galop Tricastin
@@ -37,12 +33,12 @@ export default function Header() {
 
           {/* Logo élevage desktop */}
           <div className="hidden sm:block">
-            <Image
+            <img
               src="/logo-elevage.png"
               alt="Logo élevage"
               width={64}
               height={64}
-              priority
+              className="w-16 h-16 object-contain"
             />
           </div>
         </div>
