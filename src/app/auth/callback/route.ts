@@ -5,27 +5,26 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
 
   const code = url.searchParams.get("code");
+  const token = url.searchParams.get("token");
+  const type = (url.searchParams.get("type") ?? "magiclink") as
+    | "magiclink"
+    | "recovery"
+    | "invite"
+    | "email_change";
 
-  // Sécurité : s'il n'y a pas de code, retour login
-  if (!code) {
-    return NextResponse.redirect(new URL("/login", url.origin));
-  }
+  const origin = url.origin;
 
-  // On prépare la réponse de redirection finale
-  const response = NextResponse.redirect(
-    new URL("/dashboard", url.origin)
-  );
+  // réponse de base (on la modifie avec cookies)
+  const response = NextResponse.redirect(new URL("/dashboard", origin));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        // ✅ cookies lus depuis NextRequest (FIABLE)
         getAll() {
           return request.cookies.getAll();
         },
-        // ✅ cookies écrits sur la réponse (OBLIGATOIRE)
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
@@ -35,8 +34,30 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  // 🔑 échange le code contre une session (pose les cookies)
-  await supabase.auth.exchangeCodeForSession(code);
+  try {
+    // ✅ Flow moderne (code)
+    if (code) {
+      await supabase.auth.exchangeCodeForSession(code);
+      return response;
+    }
 
-  return response;
+    // ✅ Flow token (magic link "verify")
+    if (token) {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type,
+      });
+
+      if (error) {
+        return NextResponse.redirect(new URL("/login?error=otp", origin));
+      }
+
+      return response;
+    }
+
+    // Aucun paramètre attendu
+    return NextResponse.redirect(new URL("/login", origin));
+  } catch {
+    return NextResponse.redirect(new URL("/login?error=callback", origin));
+  }
 }
