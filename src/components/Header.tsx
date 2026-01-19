@@ -4,20 +4,20 @@ export default function Header() {
   return (
     <header className="bg-white">
       <div className="px-4 sm:px-8 py-4">
-        {/* Mobile: colonne / Desktop: ligne */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* Ligne logos (mobile) / Logo gauche (desktop) */}
+
+          {/* Logo Galop (gauche) */}
           <div className="flex items-center justify-between sm:justify-start sm:gap-4">
             <Image
-              src="/logo-Photoroom.png"
-              alt="Logo écuries"
+              src="/logo-galop.png"
+              alt="Logo Le Galop Tricastin"
               width={56}
               height={56}
               priority
               className="sm:w-[64px] sm:h-[64px]"
             />
 
-            {/* Logo élevage visible sur mobile aussi (à droite) */}
+            {/* Logo élevage visible sur mobile */}
             <Image
               src="/logo-elevage.png"
               alt="Logo élevage"
@@ -35,7 +35,7 @@ export default function Header() {
             </h1>
           </div>
 
-          {/* Logo élevage (desktop) */}
+          {/* Logo élevage desktop */}
           <div className="hidden sm:block">
             <Image
               src="/logo-elevage.png"
@@ -48,7 +48,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Ligne signature */}
       <div className="h-px bg-[#1d5998]" />
     </header>
   );
