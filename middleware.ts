@@ -4,18 +4,34 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  res.headers.set('x-mw', '1') // 👈 pour vérifier qu'il s'exécute
+
+  // 🔎 Debug: on marque que le middleware est passé
+  res.headers.set('x-mw', '1')
 
   const supabase = createMiddlewareClient({ req, res })
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
   const pathname = req.nextUrl.pathname
-  const publicRoutes = ['/login', '/auth/callback']
-  const isPublicRoute = publicRoutes.some(r => pathname.startsWith(r))
 
+  // Routes publiques (accessibles sans être connecté)
+  const publicRoutes = [
+    '/login',
+    '/auth/callback',
+    '/manifest.json',
+    '/favicon.ico',
+    '/icon-192.png',
+    '/icon-512.png',
+    '/logo-appli.png',
+  ]
+  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))
+
+  // ✅ Pas connecté -> on force /login
   if (!session && !isPublicRoute) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
+    url.searchParams.set('redirectedFrom', pathname)
     return NextResponse.redirect(url)
   }
 
@@ -23,5 +39,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // ✅ matcher simple & fiable (le filtre assets se fait dans le code)
+  matcher: ['/:path*'],
 }
