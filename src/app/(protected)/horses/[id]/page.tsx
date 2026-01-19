@@ -1,8 +1,11 @@
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { nextDueDate, getStatus } from '@/lib/calcDue';
 import { parseISO, format, differenceInYears } from 'date-fns';
 import VaccHistoryClient from './VaccHistoryClient';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type VaccType = 'GRIPPE' | 'RHINO';
 type VaccRow = { id: string; type: VaccType; date: string };
@@ -73,7 +76,6 @@ function statusDotClass(s: Status) {
   return 'bg-slate-300';
 }
 
-
 function overallStatus(a: Status, b: Status): Status {
   // priorité : retard > bientôt > à faire > à jour > inconnu
   const w = (s: Status) =>
@@ -104,6 +106,9 @@ export default async function HorsePage({
   params: Promise<{ id: string }>;
 }) {
   const { id: horseId } = await params;
+
+  // ✅ IMPORTANT : on utilise le server client (cookies session -> RLS OK)
+  const supabase = await createSupabaseServerClient();
 
   // Sécurité : évite l'appel Supabase si l'ID n'existe pas
   if (!horseId || horseId === 'undefined') {
@@ -165,31 +170,34 @@ export default async function HorsePage({
     );
   }
 
-  // ✅ Nom affiché = "Nom + Affixe" (ex: "Habana du Moulon")
+  // ✅ Nom affiché = "Nom + Affixe"
   const displayName = [horse.name, horse.affixe].filter(Boolean).join(' ').trim();
   const ageLabel = computeAgeLabel(horse.birthdate ?? null, horse.birth_year ?? null);
 
   // ✅ Vaccinations
-  const { data: vaccs } = await supabase
+  const { data: vaccs, error: vaccErr } = await supabase
     .from('vaccinations')
     .select('id, type, date')
     .eq('horse_id', horseId);
 
-const vaccinations = (vaccs ?? []) as VaccRow[];
+  if (vaccErr) {
+    // On continue quand même avec un historique vide (page non cassée)
+    // et on laisse le client afficher le reste.
+  }
 
-const grippe = vaccinations
-  .filter(v => v.type === 'GRIPPE')
-  .sort((a, b) => (a.date > b.date ? -1 : 1));
+  const vaccinations = (vaccs ?? []) as VaccRow[];
 
-const rhino = vaccinations
-  .filter(v => v.type === 'RHINO')
-  .sort((a, b) => (a.date > b.date ? -1 : 1));
+  const grippe = vaccinations
+    .filter(v => v.type === 'GRIPPE')
+    .sort((a, b) => (a.date > b.date ? -1 : 1));
 
-  // Dernières dates (groupVaccinations trie DESC)
+  const rhino = vaccinations
+    .filter(v => v.type === 'RHINO')
+    .sort((a, b) => (a.date > b.date ? -1 : 1));
+
   const lastGrippe = grippe[0]?.date ?? null;
   const lastRhino = rhino[0]?.date ?? null;
 
-  // Next due + status
   const grippeDates = parseDatesSafe(grippe);
   const rhinoDates = parseDatesSafe(rhino);
 
@@ -205,9 +213,10 @@ const rhino = vaccinations
 
   const kindG = kindSummaryFromCount(grippe.length);
   const kindR = kindSummaryFromCount(rhino.length);
+
   const needsAction =
-  sG === 'en_retard' || sG === 'bientot' || sG === 'a_faire' ||
-  sR === 'en_retard' || sR === 'bientot' || sR === 'a_faire';
+    sG === 'en_retard' || sG === 'bientot' || sG === 'a_faire' ||
+    sR === 'en_retard' || sR === 'bientot' || sR === 'a_faire';
 
   const isLate = sG === 'en_retard' || sR === 'en_retard';
 
@@ -262,7 +271,7 @@ const rhino = vaccinations
           </div>
         </div>
 
-        {/* ✅ Cartes “statut vaccinal” qui ressortent */}
+        {/* ✅ Cartes “statut vaccinal” */}
         <section className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <VaccineFocusCard
             title="Grippe"
@@ -332,10 +341,7 @@ const rhino = vaccinations
         </div>
 
         {/* Historique */}
-        <VaccHistoryClient
-          horseId={horseId}
-          initialVaccinations={vaccinations}
-        />
+        <VaccHistoryClient horseId={horseId} initialVaccinations={vaccinations} />
 
         {/* double sécurité anti-recouvrement bottom nav */}
         <div className="md:hidden h-20" />
