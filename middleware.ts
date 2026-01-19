@@ -4,23 +4,19 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
+  res.headers.set('x-mw', '1') // 👈 pour vérifier qu'il s'exécute
 
   const supabase = createMiddlewareClient({ req, res })
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const { data: { session } } = await supabase.auth.getSession()
 
   const pathname = req.nextUrl.pathname
-
-  // Routes accessibles sans connexion
   const publicRoutes = ['/login', '/auth/callback']
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  const isPublicRoute = publicRoutes.some(r => pathname.startsWith(r))
 
-  // Pas connecté → redirection login
   if (!session && !isPublicRoute) {
-    const redirectUrl = req.nextUrl.clone()
-    redirectUrl.pathname = '/login'
-    return NextResponse.redirect(redirectUrl)
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
   }
 
   return res
