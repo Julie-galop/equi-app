@@ -4,9 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // On prépare une response mutable pour que Supabase puisse écrire les cookies si besoin
   const response = NextResponse.next();
-  if (pathname.startsWith("/auth/callback")) return response;
+
+  // Laisser passer le callback (utile + évite boucles)
+  if (pathname.startsWith("/auth/callback")) {
+    return response;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,29 +28,32 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // ✅ IMPORTANT: utiliser getSession (pas getUser)
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  // ✅ 1) Racine du site : "/" -> login si pas connecté, sinon dashboard
+  const isLoggedIn = !!session?.user;
+
+  // "/" -> login si pas connecté, sinon dashboard
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = user ? "/dashboard" : "/login";
+    url.pathname = isLoggedIn ? "/dashboard" : "/login";
     return NextResponse.redirect(url);
   }
 
-  // ✅ 2) Routes protégées : si pas connecté -> /login
+  // Routes protégées
   const isProtected =
     pathname.startsWith("/dashboard") || pathname.startsWith("/horses");
 
-  if (!user && isProtected) {
+  if (!isLoggedIn && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // ✅ 3) Optionnel : si connecté et va sur /login -> /dashboard
-  if (user && pathname.startsWith("/login")) {
+  // Si connecté et va sur /login -> /dashboard
+  if (isLoggedIn && pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
@@ -56,7 +62,6 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-// On applique le middleware sur "/" + pages protégées + /login
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/horses/:path*", "/login"],
+  matcher: ["/", "/dashboard/:path*", "/horses/:path*", "/login", "/auth/callback"],
 };
