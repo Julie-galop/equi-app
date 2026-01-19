@@ -1,7 +1,10 @@
-import { supabase } from '@/lib/supabaseClient';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { parseISO, differenceInYears } from 'date-fns';
 import { nextDueDate, getStatus } from '@/lib/calcDue';
 import HorsesListClient from './HorsesListClient';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 type HorseRow = {
   id: string;
@@ -16,6 +19,7 @@ type VaccRow = {
   type: 'GRIPPE' | 'RHINO';
   date: string; // YYYY-MM-DD
 };
+
 type Status = 'a_faire' | 'en_retard' | 'bientot' | 'a_jour';
 
 type VaccineStatus = {
@@ -36,7 +40,6 @@ export type HorseCard = {
 };
 
 function computeDisplayName(h: HorseRow) {
-  // ✅ "Nom + affixe" (Habana du Moulon)
   const n = (h.name ?? '').trim();
   const a = (h.affixe ?? '').trim();
   const joined = [n, a].filter(Boolean).join(' ');
@@ -83,7 +86,6 @@ function computeVaccineStatus(type: 'GRIPPE' | 'RHINO', vaccs: VaccRow[]): Vacci
 
   const count = ofType.length;
 
-  // ✅ aucune dose
   if (count === 0) {
     return {
       type,
@@ -95,16 +97,13 @@ function computeVaccineStatus(type: 'GRIPPE' | 'RHINO', vaccs: VaccRow[]): Vacci
     };
   }
 
-  // ✅ dernière dose (on garde le "YYYY-MM-DD" venant de la DB)
   const lastDate = ofType[0].date;
 
-  // ✅ calcul échéance FFE fine (1 mois / 6 mois / annuel) via ton calcDue.ts
   const dates: Date[] = ofType.map(x => x.d);
   const next = nextDueDate(dates); // Date | null
   const nextDue = next ? next.toISOString().slice(0, 10) : null;
 
-  // ✅ statut cohérent avec le client
-  const status = getStatus(next); // 'a_faire'|'en_retard'|'bientot'|'a_jour' (selon ton calcDue)
+  const status = getStatus(next);
 
   return {
     type,
@@ -117,7 +116,8 @@ function computeVaccineStatus(type: 'GRIPPE' | 'RHINO', vaccs: VaccRow[]): Vacci
 }
 
 export default async function HorsesPage() {
-  // ✅ IMPORTANT : plus de full_name (colonne inexistante)
+  const supabase = await createSupabaseServerClient();
+
   const { data: horses, error: horsesErr } = await supabase
     .from('horses')
     .select('id, name, affixe, birthdate, birth_year')
@@ -137,13 +137,27 @@ export default async function HorsesPage() {
   const horseList = (horses ?? []) as HorseRow[];
   const horseIds = horseList.map(h => h.id);
 
-if (horseIds.length === 0) {
-  return <HorsesListClient initialCards={[]} />;
-}
-  const { data: vaccs } = await supabase
+  if (horseIds.length === 0) {
+    return <HorsesListClient initialCards={[]} />;
+  }
+
+  const { data: vaccs, error: vaccErr } = await supabase
     .from('vaccinations')
     .select('horse_id, type, date')
     .in('horse_id', horseIds);
+
+  if (vaccErr) {
+    // On renvoie quand même les chevaux, mais sans statuts si vaccs KO
+    const fallbackCards: HorseCard[] = horseList.map(h => ({
+      id: h.id,
+      displayName: computeDisplayName(h),
+      ageLabel: computeAgeLabel(h.birthdate, h.birth_year),
+      grippe: { type: 'GRIPPE', label: 'Grippe', lastDate: null, nextDue: null, status: 'a_faire', kind: '—' },
+      rhino: { type: 'RHINO', label: 'Rhino', lastDate: null, nextDue: null, status: 'a_faire', kind: '—' },
+    }));
+
+    return <HorsesListClient initialCards={fallbackCards} />;
+  }
 
   const vaccRows = (vaccs ?? []) as VaccRow[];
 
