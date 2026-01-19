@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 export async function middleware(req: NextRequest) {
   let res = NextResponse.next()
 
-  // Debug: on pourra vérifier qu'il tourne en prod
+  // 🔎 DEBUG : prouver qu'il s'exécute
   res.headers.set('x-mw', '1')
 
   const supabase = createServerClient(
@@ -26,10 +26,8 @@ export async function middleware(req: NextRequest) {
   )
 
   const { data: { session } } = await supabase.auth.getSession()
-
   const pathname = req.nextUrl.pathname
 
-  // Routes publiques
   const isPublic =
     pathname === '/login' ||
     pathname.startsWith('/auth/callback') ||
@@ -37,10 +35,8 @@ export async function middleware(req: NextRequest) {
     pathname === '/manifest.json' ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/icon-') ||
-    pathname === '/logo-appli.png' ||
-    pathname.startsWith('/api') // optionnel
+    pathname === '/logo-appli.png'
 
-  // 🔒 Si pas connecté -> /login
   if (!session && !isPublic) {
     const url = req.nextUrl.clone()
     url.pathname = '/login'
