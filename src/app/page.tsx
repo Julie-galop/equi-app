@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-export default async function Home() {
+export default async function RootPage() {
   const cookieStore = cookies();
 
   const supabase = createServerClient(
@@ -21,6 +21,11 @@ export default async function Home() {
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session) redirect("/login");
+  // 🔒 PAS CONNECTÉ → LOGIN
+  if (!session) {
+    redirect("/login");
+  }
+
+  // ✅ CONNECTÉ → DASHBOARD
   redirect("/dashboard");
 }
