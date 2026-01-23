@@ -3,9 +3,19 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
 
 type BirthMode = 'FULL' | 'YEAR';
+
+type HorsePayload = {
+  id: string;
+  name: string | null;
+  affixe: string | null;
+  sire: string | null;
+  dam: string | null;
+  dam_sire: string | null;
+  birthdate: string | null; // YYYY-MM-DD
+  birth_year: number | null;
+};
 
 export default function EditHorsePage() {
   const router = useRouter();
@@ -38,7 +48,7 @@ export default function EditHorsePage() {
     return [n, a].filter(Boolean).join(' ');
   }, [name, affixe]);
 
-  // ✅ Pré-remplissage depuis Supabase
+  // ✅ Pré-remplissage via API (server -> cookies -> RLS OK)
   useEffect(() => {
     let cancelled = false;
 
@@ -52,45 +62,53 @@ export default function EditHorsePage() {
         return;
       }
 
-      const { data, error: err } = await supabase
-        .from('horses')
-        .select('id, name, affixe, sire, dam, dam_sire, birthdate, birth_year')
-        .eq('id', horseId)
-        .single();
+      try {
+        const res = await fetch(`/api/horses/get?id=${encodeURIComponent(horseId)}`, {
+          method: 'GET',
+          cache: 'no-store',
+        });
 
-      if (cancelled) return;
+        const json = await res.json();
 
-      if (err || !data) {
-        setError(err?.message || 'Impossible de charger le cheval.');
+        if (!res.ok) {
+          throw new Error(json?.error || 'Impossible de charger le cheval.');
+        }
+
+        const data = json?.horse as HorsePayload | undefined;
+        if (!data) throw new Error('Cheval introuvable.');
+
+        if (cancelled) return;
+
+        setName((data.name ?? '').toString());
+        setAffixe((data.affixe ?? '').toString());
+        setSire((data.sire ?? '').toString());
+        setDam((data.dam ?? '').toString());
+        setDamSire((data.dam_sire ?? '').toString());
+
+        // naissance : si birthdate existe => FULL, sinon YEAR si birth_year
+        const bd = data.birthdate ? String(data.birthdate) : '';
+        const by = data.birth_year ? String(data.birth_year) : '';
+
+        if (bd) {
+          setBirthMode('FULL');
+          setBirthdate(bd);
+          setBirthYear('');
+        } else if (by) {
+          setBirthMode('YEAR');
+          setBirthYear(by);
+          setBirthdate('');
+        } else {
+          setBirthMode('FULL');
+          setBirthdate('');
+          setBirthYear('');
+        }
+
         setLoading(false);
-        return;
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.message || 'Impossible de charger le cheval.');
+        setLoading(false);
       }
-
-      setName((data.name ?? '').toString());
-      setAffixe((data.affixe ?? '').toString());
-      setSire((data.sire ?? '').toString());
-      setDam((data.dam ?? '').toString());
-      setDamSire((data.dam_sire ?? '').toString());
-
-      // naissance : si birthdate existe => FULL, sinon YEAR si birth_year
-      const bd = data.birthdate ? String(data.birthdate) : '';
-      const by = data.birth_year ? String(data.birth_year) : '';
-
-      if (bd) {
-        setBirthMode('FULL');
-        setBirthdate(bd);
-        setBirthYear('');
-      } else if (by) {
-        setBirthMode('YEAR');
-        setBirthYear(by);
-        setBirthdate('');
-      } else {
-        setBirthMode('FULL');
-        setBirthdate('');
-        setBirthYear('');
-      }
-
-      setLoading(false);
     };
 
     load();
