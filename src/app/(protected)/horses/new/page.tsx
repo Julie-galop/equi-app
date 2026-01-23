@@ -93,6 +93,7 @@ export default function NewHorsePage() {
     try {
       const res = await fetch('/api/horses/create', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           affixe: affixe.trim(),
